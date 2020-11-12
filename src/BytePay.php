@@ -66,6 +66,12 @@ class BytePay
 
                 break;
 
+            case 'wechatqrcode': // 微信主扫
+
+                $result = $this->wechatqrcode($params);
+
+                break;
+
             default:
 
                 throw new InvalidArgumentException('支付方式：' . $params['paytool'] . " 暂不支持");
@@ -74,6 +80,25 @@ class BytePay
 
         return $result;
 
+    }
+
+    public function wechatqrcode(array $params = [])
+    {
+        $this->setGuzzleOptions(['headers' => ['Content-Type' => 'application/json;charset=UTF-8']]);
+
+        $params['merchant_id'] = $this->merchant_id;
+
+        $params['timestamp'] = time();
+
+        $params['sign'] = $this->signature($params);
+
+        $requestApiUrl = $this->byte_pay_domain . '/payments';
+
+        var_dump($params);
+
+        $response = $this->getHttpClient()->post($requestApiUrl, ['json' => $params])->getBody();
+
+        return json_decode($response, true);
     }
 
     /**
@@ -95,6 +120,27 @@ class BytePay
         $requestApiUrl = $this->byte_pay_domain . '/payment_refunds';
 
         $response = $this->getHttpClient()->post($requestApiUrl, ['json' => $params])->getBody();
+
+        return json_decode($response, true);
+    }
+
+    /**
+     * 查询订单
+     * @param array $params
+     * @return mixed
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    public function orderquery(array $params = [])
+    {
+        $params['merchant_id'] = $this->merchant_id;
+
+        $params['timestamp'] = time();
+
+        $params['sign'] = $this->signature($params);
+
+        $requestApiUrl = $this->byte_pay_domain . '/payments/' . $params['ordercode'];
+
+        $response = $this->getHttpClient()->get($requestApiUrl, ['json' => $params])->getBody();
 
         return json_decode($response, true);
     }
