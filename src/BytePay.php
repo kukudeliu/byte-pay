@@ -72,6 +72,12 @@ class BytePay
 
                 break;
 
+            case 'alipayqrcode': // 微信主扫
+
+                $result = $this->alipayqrcode($params);
+
+                break;
+
             default:
 
                 throw new InvalidArgumentException('支付方式：' . $params['paytool'] . " 暂不支持");
@@ -94,7 +100,26 @@ class BytePay
 
         $requestApiUrl = $this->byte_pay_domain . '/payments';
 
-        var_dump($params);
+        $response = $this->getHttpClient()->post($requestApiUrl, ['json' => $params])->getBody();
+
+        return json_decode($response, true);
+    }
+
+    /**
+     * 支付宝扫码支付
+     * @param array $params
+     * @return mixed
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    public function alipayqrcode(array $params = [])
+    {
+        $params['merchant_id'] = $this->merchant_id;
+
+        $params['timestamp'] = time();
+
+        $params['sign'] = $this->signature($params);
+
+        $requestApiUrl = $this->byte_pay_domain . '/payments';
 
         $response = $this->getHttpClient()->post($requestApiUrl, ['json' => $params])->getBody();
 
