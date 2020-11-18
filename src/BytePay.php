@@ -72,7 +72,7 @@ class BytePay
 
                 break;
 
-            case 'alipayqrcode': // 微信主扫
+            case 'alipayqrcode': // 支付宝扫码支付
 
                 $result = $this->alipayqrcode($params);
 
@@ -127,8 +127,11 @@ class BytePay
     }
 
     /**
-     * 退款发起
+     * 退款发起 - 目前一笔订单只能退一次
      * @param array $params
+     * $params['refund_code'] => 退款订单编号
+     * $params['ordercode']   => 要退款的订单编号
+     * $params['amount']      => 退款金额
      * @return mixed
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
@@ -145,6 +148,30 @@ class BytePay
         $requestApiUrl = $this->byte_pay_domain . '/payment_refunds';
 
         $response = $this->getHttpClient()->post($requestApiUrl, ['json' => $params])->getBody();
+
+        return json_decode($response, true);
+    }
+
+    /**
+     * 退款查询
+     * @param array $params
+     * $params['refund_code'] => 退款订单编号
+     * @return mixed
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    public function refundquery(array $params = [])
+    {
+        $this->setGuzzleOptions(['headers' => ['Content-Type' => 'application/json;charset=UTF-8']]);
+
+        $params['merchant_id'] = $this->merchant_id;
+
+        $params['timestamp'] = time();
+
+        $params['sign'] = $this->signature($params);
+
+        $requestApiUrl = $this->byte_pay_domain . '/payment_refunds/' . $params['refund_code'];
+
+        $response = $this->getHttpClient()->get($requestApiUrl, ['json' => $params])->getBody();
 
         return json_decode($response, true);
     }
