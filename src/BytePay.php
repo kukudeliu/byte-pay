@@ -146,6 +146,31 @@ class BytePay
         return json_decode($response, true);
     }
 
+    /**
+     * 签名验证
+     * @param array $params
+     * @return bool
+     */
+    public function verifySignature(array $params)
+    {
+        $config = $this->config;
+
+        $sign = $params['sign'];
+
+        unset($params['sign']);
+
+        $ASCII = $this->ASCII($params) . "&secret=" . $config['merchant_secret'];
+
+        if ($sign == strtoupper(md5($ASCII))) {
+
+            return true;
+
+        } else {
+
+            return false;
+
+        }
+    }
 
     /**
      * 格式化参数
