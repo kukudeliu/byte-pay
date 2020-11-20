@@ -9,96 +9,69 @@ use Kukudeliu\BytePay\Exceptions\InvalidArgumentException;
 
 class BytePay
 {
-    protected $merchant_id;
-
-    protected $merchant_secret;
-
-    protected $byte_pay_domain;
+    protected $config;
 
     protected $guzzleOptions = [];
 
-    public function __construct(array $config = [])
+    public function __construct(array $config)
     {
-        if (!$config['merchant_id']) {
+        /***** 检查参数 *****/
+        $base_params = ['merchant_id' => '商户ID', 'merchant_secret' => '商户密钥', 'byte_pay_domain' => '请求地址'];
 
-            throw new InvalidArgumentException('商户编号 未填写');
+        foreach ($base_params as $key => $item) {
 
-        }
+            if (!array_key_exists($key, $config)) {
 
-        if (!$config['merchant_secret']) {
+                throw new InvalidArgumentException("参数 $item 未填写");
 
-            throw new InvalidArgumentException('商户密钥 未填写');
-
-        }
-
-        if (!$config['byte_pay_domain']) {
-
-            throw new InvalidArgumentException('请求URL 未填写');
+            }
 
         }
 
-        $this->merchant_id = $config['merchant_id'];
-
-        $this->merchant_secret = $config['merchant_secret'];
-
-        $this->byte_pay_domain = $config['byte_pay_domain'];
+        $this->config = $config;
     }
 
-    public function payment(array $params = [])
+    public function payment(array $params)
     {
-        if (!$params['paytool']) {
+        $method = $params['paytool'];
 
-            throw new InvalidArgumentException('支付方式 未填写');
+        if (method_exists($this, $method)) {
 
-        }
+            return $this->$method($params);
 
-        switch ($params['paytool']) {
+        } else {
 
-            case 'alipayswipepay': // 支付宝被扫
-
-                $result = $this->alipayswipepay($params);
-
-                break;
-
-            case 'wechatswipepay': // 微信被扫
-
-                $result = $this->wechatswipepay($params);
-
-                break;
-
-            case 'wechatqrcode': // 微信主扫
-
-                $result = $this->wechatqrcode($params);
-
-                break;
-
-            case 'alipayqrcode': // 支付宝扫码支付
-
-                $result = $this->alipayqrcode($params);
-
-                break;
-
-            default:
-
-                throw new InvalidArgumentException('支付方式：' . $params['paytool'] . " 暂不支持");
+            throw new InvalidArgumentException('支付方式：' . $params['paytool'] . " 暂不支持");
 
         }
-
-        return $result;
-
     }
 
-    public function wechatqrcode(array $params = [])
+    /**
+     * 查询订单
+     * @param array $params
+     * @return mixed
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    public function orderquery(array $params = [])
     {
+        [$params, $requestApiUrl] = $this->getParams($params, 'payments/' . $params['ordercode']);
+
         $this->setGuzzleOptions(['headers' => ['Content-Type' => 'application/json;charset=UTF-8']]);
 
-        $params['merchant_id'] = $this->merchant_id;
+        $response = $this->getHttpClient()->get($requestApiUrl, ['json' => $params])->getBody();
 
-        $params['timestamp'] = time();
+        return json_decode($response, true);
+    }
 
-        $params['sign'] = $this->signature($params);
-
-        $requestApiUrl = $this->byte_pay_domain . '/payments';
+    /**
+     * 微信条形码支付
+     * @param array $params
+     * @return mixed
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    private function wechatswipepay(array $params = [])
+    {
+        [$params, $requestApiUrl] = $this->getParams($params, 'payments');
 
         $response = $this->getHttpClient()->post($requestApiUrl, ['json' => $params])->getBody();
 
@@ -106,22 +79,16 @@ class BytePay
     }
 
     /**
-     * 支付宝扫码支付
+     * 支付宝条形码支付
      * @param array $params
      * @return mixed
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function alipayqrcode(array $params = [])
+    private function alipayswipepay(array $params = [])
     {
-        $params['merchant_id'] = $this->merchant_id;
+        [$params, $requestApiUrl] = $this->getParams($params, 'payments');
 
-        $params['timestamp'] = time();
-
-        $params['sign'] = $this->signature($params);
-
-        $requestApiUrl = $this->byte_pay_domain . '/payments';
-
-        $response = $this->getHttpClient()->post($requestApiUrl, ['json' => $params])->getBody();
+        $response = $this->getHttpClient()->post($requestApiUrl, ['form_params' => $params])->getBody();
 
         return json_decode($response, true);
     }
@@ -137,15 +104,9 @@ class BytePay
      */
     public function refund(array $params = [])
     {
+        [$params, $requestApiUrl] = $this->getParams($params, 'payment_refunds');
+
         $this->setGuzzleOptions(['headers' => ['Content-Type' => 'application/json;charset=UTF-8']]);
-
-        $params['merchant_id'] = $this->merchant_id;
-
-        $params['timestamp'] = time();
-
-        $params['sign'] = $this->signature($params);
-
-        $requestApiUrl = $this->byte_pay_domain . '/payment_refunds';
 
         $response = $this->getHttpClient()->post($requestApiUrl, ['json' => $params])->getBody();
 
@@ -161,89 +122,58 @@ class BytePay
      */
     public function refundquery(array $params = [])
     {
+        [$params, $requestApiUrl] = $this->getParams($params, 'payment_refunds/' . $params['refund_code']);
+
         $this->setGuzzleOptions(['headers' => ['Content-Type' => 'application/json;charset=UTF-8']]);
 
-        $params['merchant_id'] = $this->merchant_id;
-
-        $params['timestamp'] = time();
-
-        $params['sign'] = $this->signature($params);
-
-        $requestApiUrl = $this->byte_pay_domain . '/payment_refunds/' . $params['refund_code'];
-
         $response = $this->getHttpClient()->get($requestApiUrl, ['json' => $params])->getBody();
 
         return json_decode($response, true);
     }
 
     /**
-     * 查询订单
+     * 支付宝扫码支付
      * @param array $params
      * @return mixed
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function orderquery(array $params = [])
+    public function alipayqrcode(array $params = [])
     {
-        $params['merchant_id'] = $this->merchant_id;
+        [$params, $request_api_url] = $this->getParams($params, 'payments');
 
-        $params['timestamp'] = time();
-
-        $params['sign'] = $this->signature($params);
-
-        $requestApiUrl = $this->byte_pay_domain . '/payments/' . $params['ordercode'];
-
-        $response = $this->getHttpClient()->get($requestApiUrl, ['json' => $params])->getBody();
+        $response = $this->getHttpClient()->post($request_api_url, ['json' => $params])->getBody();
 
         return json_decode($response, true);
     }
 
 
     /**
-     * 微信被扫
+     * 格式化参数
      * @param array $params
-     * @return mixed
-     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @param string $api_url
+     * @return array
      */
-    private function wechatswipepay(array $params = [])
+    private function getParams(array $params, string $api_url)
     {
-        $params['merchant_id'] = $this->merchant_id;
+        $config = $this->config;
+
+        $params['merchant_id'] = $config['merchant_id'];
 
         $params['timestamp'] = time();
 
         $params['sign'] = $this->signature($params);
 
-        $requestApiUrl = $this->byte_pay_domain . '/payments';
+        $request_api_url = $config['byte_pay_domain'] . '/' . $api_url;
 
-        $response = $this->getHttpClient()->post($requestApiUrl, ['json' => $params])->getBody();
-
-        return json_decode($response, true);
-    }
-
-    /**
-     * 支付宝被扫
-     * @param array $params
-     * @return mixed
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     */
-    private function alipayswipepay(array $params = [])
-    {
-        $params['merchant_id'] = $this->merchant_id;
-
-        $params['timestamp'] = time();
-
-        $params['sign'] = $this->signature($params);
-
-        $requestApiUrl = $this->byte_pay_domain . '/payments';
-
-        $response = $this->getHttpClient()->post($requestApiUrl, ['form_params' => $params])->getBody();
-
-        return json_decode($response, true);
+        return [$params, $request_api_url];
     }
 
 
     private function signature(array $params)
     {
-        $ASCII = $this->ASCII($params) . "&secret=" . $this->merchant_secret;
+        $config = $this->config;
+
+        $ASCII = $this->ASCII($params) . "&secret=" . $config['merchant_secret'];
 
         return strtoupper(md5($ASCII));
     }
